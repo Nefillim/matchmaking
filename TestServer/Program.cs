@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Newtonsoft.Json;
 
 namespace TestServer
 {
@@ -77,24 +78,30 @@ namespace TestServer
 				parse json (string)ip->byte[]
 				posilae, ip clientam v novom spiske 
 				*/
-				if (_players.Count == 2)
+				if (_players.Count >= 2)
 				{
 					HttpClient mmClient = new HttpClient();
 					var url = "http://104.199.106.137:8000/start_game/";
 					var message = new  {key = "12345", body = "give me ip"}; 
-					var response = mmClient.Post(
+					var response = mmClient.PostAsync(
 						url,
 						new StringContent(message.ToString(), Encoding.UTF8, "application/json")
 					);
-					string ip = response[0];
-					byte[] bIp = Encoding.UTF8.GetBytes(ip);
 					list<string> Room = new List<string>();
 					foreach (string t in _players.Keys)
 					{
 						Room.Add(t);
-						server.Send(new Packet(5, token, bIp), _players[t]);
-						_players.Remove(t);
-					}	
+						server.Send(new Packet(5, token, response.Content.ip), _players[t]);
+					}
+					foreach (var player in Room)
+					{
+						if (_players.ContainsKey(player))
+						{
+							TcpClient remove;
+							_players.TryRemove(player, out remove);
+							remove.Close();
+						}
+					}
 				}
 			}));
 
