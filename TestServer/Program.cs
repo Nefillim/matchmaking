@@ -3,13 +3,13 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data.OleDb;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using Newtonsoft.Json;
 
 namespace TestServer
 {
@@ -82,16 +82,24 @@ namespace TestServer
 				{
 					HttpClient mmClient = new HttpClient();
 					var url = "http://104.199.106.137:8000/start_game/";
-					var message = new  {key = "12345", body = "give me ip"}; 
-					var response = mmClient.PostAsync(
-						url,
-						new StringContent(message.ToString(), Encoding.UTF8, "application/json")
-					);
-					list<string> Room = new List<string>();
+					var message = new { key = "12345", body = "give me ip" };
+					var content = new HttpContent(message.ToString(), Encoding.UTF8, "application/json")
+					var response = mmClient.PostAsync(url, content);
+					var responseString = await response.Content.ReadAsStringAsync();
+					List<string> Room = new List<string>();
+					byte[] buffer;
+					using (var m = new MemoryStream())
+					{
+						using (var writer = new BinaryWriter(m))
+						{
+							writer.Write(responseString);
+						}
+						buffer = m.ToArray();
+					}
 					foreach (string t in _players.Keys)
 					{
 						Room.Add(t);
-						server.Send(new Packet(5, token, response.Content.ip), _players[t]);
+						server.Send(new Packet(5, token, buffer), _players[t]);
 					}
 					foreach (var player in Room)
 					{
