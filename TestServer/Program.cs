@@ -56,13 +56,21 @@ namespace TestServer
 				var ip = re.Matches(str)[0].Value;
 				Room newOne = new Room(roomCount, client, ip);
 				rooms.Add(newOne);
-				byte[] b = Encoding.UTF8.GetBytes(ip);
+				byte[] b = new byte[roomCount];
+				Console.WriteLine("created room with id " + roomCount);
+				roomCount++;
+				server.Send(new Packet((int)MessageType.CREATE_ROOM, token, b), client);
 			}));
 			
 
 			server.AddHandler((int)MessageType.JOIN_ROOM, (token, stream, client) => Task.Run(() =>
 		   {
-			   string roomId = stream.ReadString();
+			   Console.WriteLine("player joined the room");
+			   int i = stream.ReadInt32();
+			   Console.WriteLine("0");
+			   Console.WriteLine(stream.ReadString());
+			   int roomId = stream.ReadInt32();
+			   Console.WriteLine(roomId);
 			   foreach (Room _room in rooms)
 			   {
 				   if (_room.id == roomId)
@@ -71,6 +79,7 @@ namespace TestServer
 					   byte[] newIp = Encoding.UTF8.GetBytes(_room.Ip);
 					   server.Send(new Packet((int)MessageType.START_GAME, token, newIp), _room.sub);
 					   server.Send(new Packet((int)MessageType.START_GAME, token, newIp), _room.creator);
+					   Console.WriteLine("ip sent");
 				   }
 			   }
 			   
@@ -78,7 +87,8 @@ namespace TestServer
 
 			server.AddHandler((int)MessageType.JOIN_MM, (token, stream, client) => Task.Run(() =>
 			{
-				string str = "";
+				Console.WriteLine("player joined MM");
+				string str = "room list:";
 				foreach (Room _room in rooms)
 				{
 					str = str + "," + _room.id;

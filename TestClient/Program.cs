@@ -1,4 +1,4 @@
-﻿using matchmaking;
+﻿
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -49,12 +49,13 @@ namespace TestClient
 
 
 
-			tcpClient.Client.Send(new Packet((int)MessageType.LOGIN, token, null).Serialize());
-			tcpClient.Client.Send(new Packet((int)MessageType.JOIN_MM, token, null).Serialize());
+			
 			string roomList;
 			using (var stream = tcpClient.GetStream())
 			using (var reader = new BinaryReader(stream))
 			{
+				tcpClient.Client.Send(new Packet((int)MessageType.LOGIN, token, null).Serialize());
+				tcpClient.Client.Send(new Packet((int)MessageType.JOIN_MM, token, null).Serialize());/*
 				Handler join = delegate () {
 					reader.ReadString();
 					roomList = reader.ReadString();
@@ -87,7 +88,7 @@ namespace TestClient
 						tcpClient.Client.Send(new Packet((int)MessageType.START_GAME, token, null).Serialize());
 						ip = reader.ReadString();
 						tcpClient.Connect(new IPEndPoint(IPAddress.Parse(ip), 8001));
-						Console.WriteLine("Connected to %d", ip);
+						Console.WriteLine("Connected to " + ip);
 					}
 					else
 					{
@@ -111,17 +112,19 @@ namespace TestClient
 					}
 				};
 				_handlers.Add((int)MessageType.LEAVE_ROOM, join);
-
+				*/
 
 				while (!gameFound)
 				{
 					while (tcpClient.Available == 0) ;
 					var id = reader.ReadInt32();
-					_handlers[id].Invoke();
-					/*if (id == (int)MessageType.JOIN_MM)
+					Console.WriteLine("last message id:" + id);
+					//_handlers[id].Invoke();
+					if (id == (int)MessageType.JOIN_MM)
 					{
 						reader.ReadString();
-						roomList = reader.ReadString();
+						byte[] buffer = reader.ReadBytes(10);
+						roomList = Encoding.UTF8.GetString(buffer);
 						Console.WriteLine(roomList);
 						command = Console.ReadLine();
 						if (command == "create")
@@ -132,7 +135,8 @@ namespace TestClient
 						}
 						else
 						{
-							byte[] roomId = Encoding.UTF8.GetBytes(command);
+							int Id = Convert.ToInt32(command);
+							byte[] roomId = new byte[Id];
 							tcpClient.Client.Send(new Packet((int)MessageType.JOIN_ROOM, token, roomId).Serialize());
 							Console.WriteLine("You joined the room.");
 							creator = false;
@@ -148,7 +152,8 @@ namespace TestClient
 							tcpClient.Client.Send(new Packet((int)MessageType.START_GAME, token, null).Serialize());
 							ip = reader.ReadString();
 							tcpClient.Connect(new IPEndPoint(IPAddress.Parse(ip), 8001));
-							Console.WriteLine("Connected to %d", ip);
+							Console.WriteLine("Connected to " + ip);
+							gameFound = true;
 						}
 						else {
 							tcpClient.Client.Send(new Packet((int)MessageType.LEAVE_ROOM, token, null).Serialize());
@@ -156,6 +161,7 @@ namespace TestClient
 					}
 					if (id == (int)MessageType.LEAVE_ROOM)
 					{
+						reader.ReadString();
 						if (creator)
 						{
 							Console.WriteLine("Enother player left the room wait please.");
@@ -164,10 +170,18 @@ namespace TestClient
 							Console.WriteLine("Host left he romm? chose enother one please.");
 							tcpClient.Client.Send(new Packet((int)MessageType.JOIN_MM, token, null).Serialize());
 						}
-					}*/
+					}
+					if (id == (int)MessageType.CREATE_ROOM)
+					{
+						reader.ReadString();
+						byte[] buffer = reader.ReadBytes(4);
+						int roomId = Convert.ToInt32(buffer);
+						Console.WriteLine(roomId);
+						
+					}
 				}
 			}
-			Console.ReadKey();
+			//Console.ReadKey();
 		}
 	}
 }

@@ -1,4 +1,4 @@
-﻿using matchmaking;
+﻿
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -15,7 +15,7 @@ namespace matchmaking
 {
 	public class Room
 	{
-		public string id;
+		public int id;
 		public TcpClient creator;
 		public TcpClient sub;
 		public string Ip;
