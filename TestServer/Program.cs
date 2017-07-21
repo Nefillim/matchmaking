@@ -18,6 +18,7 @@ namespace TestServer
 	class Program
 	{
 		private static ConcurrentDictionary<string, TcpClient> _players;
+		private static ConcurrentDictionary<TcpClient, string> _tokens;
 
 		private enum MessageType : int
 		{
@@ -27,11 +28,13 @@ namespace TestServer
 			CREATE_ROOM,
 			JOIN_MM,
 			LOGIN,
+			LEAVE_GAME
 		}
 
 		public static void Main(string[] args)
 		{
 			_players = new ConcurrentDictionary<string, TcpClient>();
+			_tokens = new ConcurrentDictionary<TcpClient, string>();
 			List<Room> rooms = new List<Room>();
 			int roomCount = 1;
 			var server = new Server(8001);
@@ -56,7 +59,7 @@ namespace TestServer
 				var ip = re.Matches(str)[0].Value;
 				Room newOne = new Room(roomCount, client, ip);
 				rooms.Add(newOne);
-				byte[] b = new byte[roomCount];
+				byte[] b = BitConverter.GetBytes(roomCount);
 				Console.WriteLine("created room with id " + roomCount);
 				roomCount++;
 				server.Send(new Packet((int)MessageType.CREATE_ROOM, token, b), client);
@@ -67,34 +70,55 @@ namespace TestServer
 		   {
 			   Console.WriteLine("player joined the room");
 			   int i = stream.ReadInt32();
-			   Console.WriteLine("0");
-			   Console.WriteLine(stream.ReadString());
-			   int roomId = stream.ReadInt32();
-			   Console.WriteLine(roomId);
+			   Console.WriteLine(i);
+			   Room room = new Room();
+			   bool disc = false;
 			   foreach (Room _room in rooms)
 			   {
-				   if (_room.id == roomId)
+				   if (_room.id == i && _room.sub == null)
 				   {
+					   string ttoken = _tokens[_room.creator];
 					   _room.sub = client;
 					   byte[] newIp = Encoding.UTF8.GetBytes(_room.Ip);
-					   server.Send(new Packet((int)MessageType.START_GAME, token, newIp), _room.sub);
-					   server.Send(new Packet((int)MessageType.START_GAME, token, newIp), _room.creator);
-					   Console.WriteLine("ip sent");
+					   if (_players[token].Connected)
+					   {
+						   server.Send(new Packet((int)MessageType.START_GAME, token, newIp), _room.sub);
+						   Console.WriteLine("ip sent to sub");
+					   }
+					   else {
+						   server.Send(new Packet((int)MessageType.LEAVE_ROOM, ttoken, null), _room.creator);
+						   room = _room;
+						   _room.sub = null;
+					   }					   
+					   
+					   if (_players[ttoken].Connected)
+					   {
+						   server.Send(new Packet((int)MessageType.START_GAME, ttoken, newIp), _room.creator);
+						   Console.WriteLine("ip sent to creator");
+					   }
+					   else
+					   {
+						   server.Send(new Packet((int)MessageType.LEAVE_ROOM, token, null), _room.sub);
+						   room = _room;
+						   disc = true;
+					   }
 				   }
+				   if (_room.sub != null) server.Send(new Packet((int)MessageType.JOIN_MM, token, null), client);
 			   }
-			   
+			   if (disc) { rooms.Remove(room);}
 		   }));
 
 			server.AddHandler((int)MessageType.JOIN_MM, (token, stream, client) => Task.Run(() =>
 			{
 				Console.WriteLine("player joined MM");
-				string str = "room list:";
+				string str = "room list: ";
 				foreach (Room _room in rooms)
 				{
-					str = str + "," + _room.id;
+					str = str + _room.id + "; ";					
 				}
+				Console.WriteLine(str);
 				byte[] buffer = Encoding.UTF8.GetBytes(str);
-				server.Send(new Packet((int)MessageType.JOIN_MM, token, buffer), client);
+				server.Send(new Packet((int)MessageType.JOIN_MM, token, null), client);
 			}));
 
 			server.AddHandler((int)MessageType.START_GAME, (token, stream, client) => Task.Run(() =>
@@ -105,20 +129,25 @@ namespace TestServer
 				   if (_room.creator == client)
 				   {
 					   _room.crReady = true;
+					   Console.WriteLine("creator is redy in room  " + _room.id);
 				   }
 				   if (_room.sub == client)
 				   {
 					   _room.subReady = true;
+					   Console.WriteLine("sub is redy in room  " + _room.id);
 				   }
 				   if (_room.crReady == true && _room.subReady == true)
 				   {
 					   byte[] Ip = Encoding.UTF8.GetBytes(_room.Ip);
 					   server.Send(new Packet(1, token, Ip), _room.creator);
 					   server.Send(new Packet(1, token, Ip), _room.sub);
+					   Console.WriteLine("Game begun.");
 				   }
 				   room = _room;
 			   }
-			   rooms.Remove(room);
+			   if (room.crReady && room.subReady) {
+				   rooms.Remove(room);
+			   }
 		   }));	
 
 
@@ -142,9 +171,16 @@ namespace TestServer
 
 			server.AddHandler((int)MessageType.LOGIN, (token, stream, client) => Task.Run(() =>
 		   {
-			   _players.AddOrUpdate(token, client, (t, old) => client);			  			   
+			   _players.AddOrUpdate(token, client, (t, old) => client);
+			   _tokens.AddOrUpdate(client, token, (t, old) => token);
 		   }));
-			server.StartListener().Wait();		
+			server.AddHandler((int)MessageType.LEAVE_GAME, (token, stream, client) => Task.Run(() =>
+			{
+				_players.TryRemove(token, out client);
+				_tokens.TryRemove(client, out token);
+			}));
+			server.StartListener().Wait();
+			
 		}
 	}
 }

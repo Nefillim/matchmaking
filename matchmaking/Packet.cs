@@ -19,6 +19,7 @@ namespace matchmaking
                 using (var writer = new BinaryWriter(m)) {
                     writer.Write(Type);
                     writer.Write(Token);
+					if(Body != null)
                     writer.Write(Body);
                 }
                 return m.ToArray();
